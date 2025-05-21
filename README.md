@@ -1,36 +1,60 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Proof of Reserve Dashboard
 
-## Getting Started
+Merkeziyetsiz borsaların Proof of Reserve (PoR) verilerini görüntüleyebileceğiniz modern ve şık bir web dashboard uygulaması.
 
-First, run the development server:
+## Özellikler
 
+- 🔐 JWT tabanlı kimlik doğrulama
+- 📊 Borsa yönetimi
+- 📝 Liste yönetimi
+- 💼 Cüzdan ve token yönetimi
+- 📸 Snapshot alma ve görüntüleme
+- 🌓 Karanlık/Aydınlık tema desteği
+
+## Teknolojiler
+
+- Next.js (App Router)
+- React
+- TypeScript
+- Tailwind CSS
+- Axios
+- React Query
+- React Hot Toast
+
+## Başlangıç
+
+1. Projeyi klonlayın:
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+git clone https://github.com/yourusername/proof-of-reserve-dashboard.git
+cd proof-of-reserve-dashboard
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+2. Bağımlılıkları yükleyin:
+```bash
+npm install
+```
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+3. Geliştirme sunucusunu başlatın:
+```bash
+npm run dev
+```
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+4. Tarayıcınızda [http://localhost:3000](http://localhost:3000) adresini açın.
 
-## Learn More
+## API Yapılandırması
 
-To learn more about Next.js, take a look at the following resources:
+Uygulama varsayılan olarak `https://api.lytera.io` API'sini kullanır. API URL'sini değiştirmek için `src/utils/api.ts` dosyasını düzenleyebilirsiniz.
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## Dağıtım
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+Bu proje Vercel'de dağıtıma hazırdır. Dağıtım için:
 
-## Deploy on Vercel
+1. Projeyi GitHub'a push edin
+2. Vercel'de yeni bir proje oluşturun
+3. GitHub reponuzu seçin
+4. Dağıtım ayarlarını yapılandırın
+5. Deploy edin
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+## Lisans
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+MIT
