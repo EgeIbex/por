@@ -236,8 +236,16 @@ export default function ListDetailPage() {
   const handleQuery = async () => {
     setQueryLoading(true);
     try {
-      const formattedDate = `${selectedDate.getDate().toString().padStart(2, '0')}.${(selectedDate.getMonth()+1).toString().padStart(2, '0')}.${selectedDate.getFullYear()}`;
-      const response = await api.post("/reserves", { list_id: Number(params.id), date: formattedDate });
+      const today = new Date();
+      today.setHours(0,0,0,0);
+      const isToday = selectedDate.getTime() === today.getTime();
+      let response;
+      if (isToday) {
+        response = await api.post("/reserves", { list_id: Number(params.id) });
+      } else {
+        const formattedDate = `${selectedDate.getDate().toString().padStart(2, '0')}.${(selectedDate.getMonth()+1).toString().padStart(2, '0')}.${selectedDate.getFullYear()}`;
+        response = await api.post("/reserves", { list_id: Number(params.id), date: formattedDate });
+      }
       toast.success("Sorgulama başarılı!");
       if (response.data && response.data.snapshot_id) {
         router.push(`/dashboard/snapshots/${response.data.snapshot_id}`);
@@ -321,7 +329,9 @@ export default function ListDetailPage() {
                   <span className="font-mono text-slate-700 dark:text-slate-200 break-all">{wallet.address}</span>
                 </div>
                 <div className="flex gap-2">
-                  <button onClick={() => openTokenModal(wIdx)} className="px-3 py-1 bg-gradient-to-tr from-blue-500 to-blue-700 hover:from-blue-600 hover:to-blue-800 text-white rounded-lg text-sm font-semibold shadow transition">Token Ekle</button>
+                  {wallet.chain !== 'bitcoin' && (
+                    <button onClick={() => openTokenModal(wIdx)} className="px-3 py-1 bg-gradient-to-tr from-blue-500 to-blue-700 hover:from-blue-600 hover:to-blue-800 text-white rounded-lg text-sm font-semibold shadow transition">Token Ekle</button>
+                  )}
                   <button onClick={() => handleRemoveWallet(wIdx)} className="px-3 py-1 bg-gradient-to-tr from-red-500 to-red-700 hover:from-red-600 hover:to-red-800 text-white rounded-lg text-sm font-semibold shadow transition">Sil</button>
                 </div>
               </div>
@@ -347,7 +357,7 @@ export default function ListDetailPage() {
       )}
 
       {/* Token Ekleme Popup */}
-      {showTokenModal.open && (
+      {showTokenModal.open && wallets[showTokenModal.walletIdx!]?.chain !== 'bitcoin' && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60" onClick={e => { if (e.target === e.currentTarget) setShowTokenModal({ open: false, walletIdx: null }); }}>
           <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-xl p-8 w-full max-w-2xl relative animate-fade-in">
             <button
@@ -456,7 +466,7 @@ export default function ListDetailPage() {
                 popperPlacement="bottom-end"
                 calendarClassName="!z-50"
                 minDate={new Date(2025, 0, 1)}
-                maxDate={(() => { const d = new Date(); d.setDate(d.getDate() - 1); d.setHours(0,0,0,0); return d; })()}
+                maxDate={(() => { const d = new Date(); d.setHours(0,0,0,0); return d; })()}
               />
               <button
                 type="button"
@@ -484,6 +494,12 @@ export default function ListDetailPage() {
             </div>
           )}
         </div>
+        {/* Açıklama */}
+        {Array.isArray(list.wallets) && list.wallets.length > 0 && (
+          <div className="flex justify-end">
+            <span className="italic text-sm text-slate-400">*bu günün tarihi seçilir ise anlık olarak sorgu atılır</span>
+          </div>
+        )}
         {Array.isArray(list.wallets) ? (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             {list.wallets.map((wallet: any, idx: number) => (
