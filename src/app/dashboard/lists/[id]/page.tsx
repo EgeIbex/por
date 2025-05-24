@@ -6,6 +6,7 @@ import api from "@/utils/api";
 import toast from "react-hot-toast";
 import DatePicker from "react-datepicker";
 import "react-datepicker/dist/react-datepicker.css";
+import chainValidations from "@/assets/chainValidations.json";
 
 interface Wallet {
   id: string;
@@ -44,12 +45,11 @@ export default function ListDetailPage() {
   const [list, setList] = useState<List | null>(null);
   const [loading, setLoading] = useState(true);
   const [importing, setImporting] = useState(false);
-  const [wallets, setWallets] = useState<ImportWallet[]>([]);
-  const [currentWallet, setCurrentWallet] = useState<ImportWallet>({
-    chain: "ethereum",
-    address: "",
-    tokens: []
-  });
+  const [wallets, setWallets] = useState<any[]>([]);
+  const [currentWallet, setCurrentWallet] = useState({ chain: '', address: '' });
+  const [showTokenModal, setShowTokenModal] = useState<{ open: boolean, walletIdx: number | null }>({ open: false, walletIdx: null });
+  const [tokenAddressInput, setTokenAddressInput] = useState('');
+  const [tokenLoading, setTokenLoading] = useState(false);
   const [currentToken, setCurrentToken] = useState({
     address: "",
     name: "",
@@ -63,24 +63,15 @@ export default function ListDetailPage() {
     d.setHours(0,0,0,0);
     return d;
   });
-
-  const availableChains = [
-    "ethereum",
-    "bitcoin",
-    "solana",
-    "avax_cchain",
-    "avax_xchain",
-    "tron",
-    "chiliz",
-    "xrp"
-  ];
+  const [chains, setChains] = useState<{ name: string; display_name: string }[]>([]);
 
   // Token bilgilerini otomatik dolduracak gerçek API fonksiyonu
   async function fetchTokenInfo(address: string, chain: string) {
     // Demo API key ve contract info endpoint
     const demoApiKey = "CG-eDGt7ohGuQyXNjvZAGqT8PSm";
-    // Chain id'yi endpointte kullan
-    const url = `https://api.coingecko.com/api/v3/coins/${chain}/contract/${address}`;
+    // Chain id'yi endpointte kullan (avax_cchain ise avax olarak düzelt)
+    const apiChain = chain === "avax_cchain" ? "avalanche" : chain;
+    const url = `https://api.coingecko.com/api/v3/coins/${apiChain}/contract/${address}`;
     console.log("CoinGecko DEMO API isteği:", url);
     try {
       const response = await fetch(url, {
@@ -96,7 +87,7 @@ export default function ListDetailPage() {
       return {
         name: data.name || "",
         symbol: data.symbol || "",
-        decimals: data.detail_platforms?.[chain]?.decimal_place || 18
+        decimals: data.detail_platforms?.[apiChain]?.decimal_place || 18
       };
     } catch (err) {
       console.log("Demo API isteği hatası:", err);
@@ -104,76 +95,106 @@ export default function ListDetailPage() {
     }
   }
 
-  const handleAddToken = async () => {
-    if (!currentToken.address) return;
-    // Token bilgilerini otomatik doldur
-    console.log("Girilen token adresi:", currentToken.address);
-    console.log("Seçili network:", currentWallet.chain);
-    const info: any = await fetchTokenInfo(currentToken.address, currentWallet.chain);
-    console.log("Dönen token bilgisi:", info);
-    setCurrentWallet(prev => ({
-      ...prev,
-      tokens: [...(prev.tokens || []), { ...currentToken, ...info }]
-    }));
-    setCurrentToken({
-      address: "",
-      name: "",
-      symbol: "",
-      decimals: 18
-    });
+  // Cüzdan ekle
+  const handleAddWallet = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!currentWallet.chain) {
+      toast.error('Lütfen bir chain seçin!');
+      return;
+    }
+    if (!currentWallet.address) {
+      toast.error('Lütfen bir cüzdan adresi girin!');
+      return;
+    }
+
+    const validation = chainValidations[currentWallet.chain as keyof typeof chainValidations];
+    if (!validation) {
+      toast.error('Geçersiz chain!');
+      return;
+    }
+
+    const regex = new RegExp(validation.regex);
+    if (!regex.test(currentWallet.address)) {
+      toast.error('Geçersiz cüzdan adresi!');
+      return;
+    }
+
+    setWallets(prev => [...prev, { ...currentWallet, tokens: [] }]);
+    setCurrentWallet({ chain: '', address: '' });
   };
 
-  const handleAddWallet = () => {
-    if (!currentWallet.address) return;
-    setWallets(prev => [...prev, { ...currentWallet }]);
-    setCurrentWallet({
-      chain: "ethereum",
-      address: "",
-      tokens: []
-    });
+  // Token ekle popup aç
+  const openTokenModal = (walletIdx: number) => {
+    setShowTokenModal({ open: true, walletIdx });
+    setTokenAddressInput('');
   };
 
-  const handleRemoveToken = (index: number) => {
-    setCurrentWallet(prev => ({
-      ...prev,
-      tokens: prev.tokens?.filter((_, i) => i !== index)
-    }));
+  // Token ekle işlemi
+  const handleAddTokenToWallet = async () => {
+    if (!tokenAddressInput || showTokenModal.walletIdx === null) return;
+    
+    const wallet = wallets[showTokenModal.walletIdx];
+    const validation = chainValidations[wallet.chain as keyof typeof chainValidations];
+    
+    if (!validation) {
+      toast.error('Geçersiz chain!');
+      return;
+    }
+
+    const regex = new RegExp(validation.regex);
+    if (!regex.test(tokenAddressInput)) {
+      toast.error('Geçersiz token adresi!');
+      return;
+    }
+
+    setTokenLoading(true);
+    try {
+      const info = await fetchTokenInfo(tokenAddressInput, wallet.chain);
+      setWallets(prev => prev.map((w, i) => i === showTokenModal.walletIdx ? {
+        ...w,
+        tokens: [...(w.tokens || []), { address: tokenAddressInput, ...info }]
+      } : w));
+      setShowTokenModal({ open: false, walletIdx: null });
+    } catch (err) {
+      toast.error('Token bilgisi alınamadı!');
+    } finally {
+      setTokenLoading(false);
+    }
   };
 
-  const handleRemoveWallet = (index: number) => {
-    setWallets(prev => prev.filter((_, i) => i !== index));
+  // Token sil
+  const handleRemoveToken = (walletIdx: number, tokenIdx: number) => {
+    setWallets(prev => prev.map((w: any, i: number) => i === walletIdx ? {
+      ...w,
+      tokens: w.tokens.filter((_: any, tIdx: number) => tIdx !== tokenIdx)
+    } : w));
   };
 
+  // Cüzdan sil
+  const handleRemoveWallet = (walletIdx: number) => {
+    setWallets(prev => prev.filter((_, i) => i !== walletIdx));
+  };
+
+  // İçe Aktar
   const handleImport = async (e: React.FormEvent) => {
     e.preventDefault();
     if (wallets.length === 0) return;
-
     setImporting(true);
     try {
       const body = {
-        wallets: wallets.map(w => {
-          // tokens alanı boşsa göndermeyelim
-          const { tokens, ...rest } = w;
-          if (tokens && tokens.length > 0) {
-            return { ...rest, tokens };
-          } else {
-            return rest;
-          }
-        }),
+        wallets: wallets.map(w => ({
+          chain: w.chain,
+          address: w.address,
+          tokens: w.tokens
+        })),
         list_id: Number(params.id)
       };
-      console.log("/import endpointine gönderilen body:", JSON.stringify(body, null, 2));
-      const response = await api.post("/import", body);
-
-      if (response.data.status === "ok") {
-        toast.success("İçe aktarma başarılı!");
-        fetchList();
-        setWallets([]);
-      } else {
-        toast.error("İçe aktarma sırasında hatalar oluştu!");
-      }
+      await api.post('/import', body);
+      toast.success('İçe aktarma başarılı!');
+      setWallets([]);
+      fetchList();
     } catch (error) {
-      toast.error("İçe aktarma sırasında bir hata oluştu!");
+      toast.error('İçe aktarma sırasında bir hata oluştu!');
     } finally {
       setImporting(false);
     }
@@ -194,32 +215,39 @@ export default function ListDetailPage() {
     fetchList();
   }, [params.id]);
 
-  const handleCreateReserve = async () => {
-    try {
-      await api.post("/reserves", { list_id: params.id });
-      toast.success("Reserve oluşturuldu!");
-    } catch (error) {
-      toast.error("Reserve oluşturulurken bir hata oluştu!");
-    }
-  };
+  useEffect(() => {
+    const fetchChains = async () => {
+      try {
+        const response = await api.get("/chains");
+        if (response.data && Array.isArray(response.data.historical)) {
+          setChains(response.data.historical);
+        } else {
+          setChains([]);
+        }
+      } catch (error) {
+        toast.error("Chain listesi yüklenemedi!");
+        setChains([]);
+      }
+    };
+    fetchChains();
+  }, []);
 
   // Sorgula fonksiyonu
   const handleQuery = async () => {
     setQueryLoading(true);
     try {
-      const formattedDate = selectedDate.toISOString().slice(0, 10);
-      await api.post("/reserves", { list_id: Number(params.id), date: formattedDate });
+      const formattedDate = `${selectedDate.getDate().toString().padStart(2, '0')}.${(selectedDate.getMonth()+1).toString().padStart(2, '0')}.${selectedDate.getFullYear()}`;
+      const response = await api.post("/reserves", { list_id: Number(params.id), date: formattedDate });
       toast.success("Sorgulama başarılı!");
+      if (response.data && response.data.snapshot_id) {
+        router.push(`/dashboard/snapshots/${response.data.snapshot_id}`);
+      }
     } catch (error) {
       toast.error("Sorgulama sırasında hata oluştu!");
     } finally {
       setQueryLoading(false);
     }
   };
-
-  // --- Cüzdanlar ve Tokenlar için yeni gösterim ---
-  // Eğer list?.wallets bir array ise (yeni backend yapısı), ona göre göster
-  const isWalletArray = Array.isArray(list?.wallets);
 
   if (loading) {
     return (
@@ -240,166 +268,185 @@ export default function ListDetailPage() {
   }
 
   return (
-    <div className="space-y-6">
-      <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-lg border border-slate-100 dark:border-slate-800 p-6">
-        <div className="flex items-center gap-2 mb-4">
-          <button
-            type="button"
-            onClick={() => router.back()}
-            className="p-2 rounded-full bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 shadow transition"
-            title="Geri Dön"
-          >
-            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-slate-700 dark:text-slate-200" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-            </svg>
-          </button>
-          <h3 className="text-xl font-semibold text-slate-900 dark:text-white">
-            Cüzdan ve Token Ekle
-          </h3>
-        </div>
-        <form onSubmit={handleImport} className="space-y-6">
-          {/* Mevcut Cüzdanlar */}
-          {wallets.length > 0 && (
-            <div className="space-y-4">
-              <h4 className="font-medium text-slate-700 dark:text-slate-300">Eklenen Cüzdanlar</h4>
-              {wallets.map((wallet, index) => (
-                <div key={index} className="bg-slate-50 dark:bg-slate-800 p-4 rounded-lg">
-                  <div className="flex justify-between items-start">
-                    <div>
-                      <p className="font-medium text-slate-900 dark:text-white">
-                        {wallet.chain.toUpperCase()} - {wallet.address}
-                      </p>
-                      {wallet.tokens && wallet.tokens.length > 0 && (
-                        <div className="mt-2 space-y-1">
-                          {wallet.tokens.map((token, tokenIndex) => (
-                            <p key={tokenIndex} className="text-sm text-slate-600 dark:text-slate-400">
-                              {token.symbol} ({token.address})
-                            </p>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => handleRemoveWallet(index)}
-                      className="text-red-500 hover:text-red-600"
-                    >
-                      <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
-                      </svg>
-                    </button>
-                  </div>
-                </div>
+    <div className="space-y-8">
+      {/* Cüzdan Ekleme Formu */}
+      <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-lg border border-slate-100 dark:border-slate-800 p-6 mb-6">
+        <h3 className="text-xl font-semibold text-slate-900 dark:text-white mb-4 flex items-center gap-2">
+          Cüzdan Ekle
+        </h3>
+        <form onSubmit={handleAddWallet} className="flex flex-col md:flex-row gap-4 items-end">
+          <div className="md:w-1/4">
+            <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Chain</label>
+            <select
+              value={currentWallet.chain}
+              onChange={e => {
+                const chain = e.target.value;
+                setCurrentWallet(prev => ({ 
+                  ...prev, 
+                  chain,
+                  address: ''
+                }));
+              }}
+              className="w-full"
+            >
+              <option value="">Chain seçin</option>
+              {chains.map(chain => (
+                <option key={chain.name} value={chain.name}>{chain.display_name}</option>
               ))}
-            </div>
-          )}
+            </select>
+          </div>
+          <div className="flex-1">
+            <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Cüzdan Adresi</label>
+            <input
+              type="text"
+              value={currentWallet.address}
+              onChange={e => setCurrentWallet(prev => ({ ...prev, address: e.target.value }))}
+              placeholder={currentWallet.chain ? chainValidations[currentWallet.chain as keyof typeof chainValidations]?.demoAddress : "Chain seçin"}
+              className="w-full"
+              disabled={!currentWallet.chain}
+            />
+          </div>
+          <button type="submit" className="px-4 py-2 bg-gradient-to-tr from-blue-500 to-blue-700 hover:from-blue-600 hover:to-blue-800 text-white font-semibold rounded-lg shadow-sm transition">Ekle</button>
+        </form>
+      </div>
 
-          {/* Yeni Cüzdan Ekleme Formu */}
-          <div className="space-y-4">
-            <h4 className="font-medium text-slate-700 dark:text-slate-300">Yeni Cüzdan Ekle</h4>
-            <div className="flex flex-col md:flex-row gap-4">
-              <div className="md:basis-[25%] max-w-xs">
-                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
-                  Chain
-                </label>
-                <select
-                  value={currentWallet.chain}
-                  onChange={(e) => setCurrentWallet(prev => ({ ...prev, chain: e.target.value }))}
-                  className="w-full"
-                >
-                  {availableChains.map(chain => (
-                    <option key={chain} value={chain}>{chain.toUpperCase()}</option>
-                  ))}
-                </select>
+      {/* Eklenen Cüzdanlar ve Tokenlar */}
+      {wallets.length > 0 && (
+        <div className="space-y-6 mb-6">
+          {wallets.map((wallet, wIdx) => (
+            <div key={wIdx} className="bg-slate-50 dark:bg-slate-800 p-4 rounded-lg shadow flex flex-col gap-2">
+              <div className="flex items-center justify-between">
+                <div>
+                  <span className="font-bold text-blue-700 dark:text-blue-300 mr-2">{chains.find(c => c.name === wallet.chain)?.display_name || wallet.chain.toUpperCase()}</span>
+                  <span className="font-mono text-slate-700 dark:text-slate-200 break-all">{wallet.address}</span>
+                </div>
+                <div className="flex gap-2">
+                  <button onClick={() => openTokenModal(wIdx)} className="px-3 py-1 bg-gradient-to-tr from-blue-500 to-blue-700 hover:from-blue-600 hover:to-blue-800 text-white rounded-lg text-sm font-semibold shadow transition">Token Ekle</button>
+                  <button onClick={() => handleRemoveWallet(wIdx)} className="px-3 py-1 bg-gradient-to-tr from-red-500 to-red-700 hover:from-red-600 hover:to-red-800 text-white rounded-lg text-sm font-semibold shadow transition">Sil</button>
+                </div>
               </div>
-              <div className="md:basis-[37.5%]">
-                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
-                  Cüzdan Adresi
-                </label>
-                <input
-                  type="text"
-                  value={currentWallet.address}
-                  onChange={(e) => setCurrentWallet(prev => ({ ...prev, address: e.target.value }))}
-                  placeholder="0x..."
-                  className="w-full"
-                />
+              {wallet.tokens && wallet.tokens.length > 0 && (
+                <div className="mt-2">
+                  <div className="font-medium text-slate-700 dark:text-slate-300 mb-1">Tokenlar:</div>
+                  <ul className="flex flex-wrap gap-2">
+                    {wallet.tokens.map((token: any, tIdx: number) => (
+                      <li key={tIdx} className="bg-white dark:bg-slate-900 rounded px-3 py-1 flex items-center gap-2 shadow text-sm">
+                        <span className="font-semibold text-blue-600 dark:text-blue-300">{token.symbol}</span>
+                        <span className="text-slate-500 dark:text-slate-400">{token.name}</span>
+                        <span className="text-slate-400 dark:text-slate-500">({token.address})</span>
+                        <span className="text-slate-400 dark:text-slate-500">Decimals: {token.decimals}</span>
+                        <button onClick={() => handleRemoveToken(wIdx, tIdx)} className="ml-2 text-red-500 hover:text-red-700">×</button>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Token Ekleme Popup */}
+      {showTokenModal.open && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60" onClick={e => { if (e.target === e.currentTarget) setShowTokenModal({ open: false, walletIdx: null }); }}>
+          <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-xl p-8 w-full max-w-2xl relative animate-fade-in">
+            <button
+              onClick={() => setShowTokenModal({ open: false, walletIdx: null })}
+              className="absolute top-4 right-4 text-slate-400 hover:text-blue-600 dark:hover:text-blue-300 text-xl"
+              aria-label="Kapat"
+            >×</button>
+            
+            <div className="space-y-6">
+              {/* Başlık ve Cüzdan Bilgileri */}
+              <div>
+                <h3 className="text-xl font-bold text-slate-900 dark:text-white mb-2">Token Ekle</h3>
+                {showTokenModal.walletIdx !== null && (
+                  <div className="bg-slate-50 dark:bg-slate-800 rounded-lg p-4">
+                    <div className="flex items-center gap-2 mb-2">
+                      <span className="text-sm font-medium text-slate-500 dark:text-slate-400">Chain:</span>
+                      <span className="font-semibold text-blue-600 dark:text-blue-300">
+                        {chains.find(c => c.name === wallets[showTokenModal.walletIdx!].chain)?.display_name || wallets[showTokenModal.walletIdx!].chain.toUpperCase()}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm font-medium text-slate-500 dark:text-slate-400">Cüzdan Adresi:</span>
+                      <span className="font-mono text-sm text-slate-700 dark:text-slate-200 break-all">
+                        {wallets[showTokenModal.walletIdx!].address}
+                      </span>
+                    </div>
+                  </div>
+                )}
               </div>
-              <div className="md:basis-[37.5%]">
-                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
+
+              {/* Token Adresi Input */}
+              <div>
+                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
                   Token Adresi
                 </label>
                 <input
                   type="text"
-                  value={currentToken.address}
-                  onChange={(e) => setCurrentToken(prev => ({ ...prev, address: e.target.value }))}
-                  placeholder="0x..."
-                  className="w-full"
+                  placeholder={showTokenModal.walletIdx !== null ? chainValidations[wallets[showTokenModal.walletIdx].chain as keyof typeof chainValidations]?.demoAddress : "Token adresi"}
+                  value={tokenAddressInput}
+                  onChange={e => setTokenAddressInput(e.target.value)}
+                  className="w-full px-4 py-3 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  autoFocus
                 />
+                <p className="mt-2 text-sm text-slate-500 dark:text-slate-400">
+                  Lütfen geçerli bir token adresi girin. Adres, seçili chain'in formatına uygun olmalıdır.
+                </p>
               </div>
-            </div>
 
-            {/* Mevcut Tokenlar */}
-            {currentWallet.tokens && currentWallet.tokens.length > 0 && (
-              <div className="mt-4 space-y-2">
-                <h5 className="font-medium text-slate-700 dark:text-slate-300">Eklenen Tokenlar</h5>
-                {currentWallet.tokens.map((token, index) => (
-                  <div key={index} className="flex justify-between items-center bg-slate-50 dark:bg-slate-800 p-2 rounded">
-                    <span className="text-sm text-slate-600 dark:text-slate-400">
-                      {token.symbol.toUpperCase()} {token.name} ({token.address})
-                    </span>
-                    <button
-                      type="button"
-                      onClick={() => handleRemoveToken(index)}
-                      className="text-red-500 hover:text-red-600"
-                    >
-                      <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
+              {/* Butonlar */}
+              <div className="flex justify-end gap-3">
+                <button
+                  onClick={() => setShowTokenModal({ open: false, walletIdx: null })}
+                  className="px-4 py-2 text-slate-700 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white font-medium rounded-lg transition"
+                >
+                  İptal
+                </button>
+                <button
+                  onClick={handleAddTokenToWallet}
+                  disabled={tokenLoading || !tokenAddressInput}
+                  className="px-6 py-2 bg-gradient-to-tr from-blue-500 to-blue-700 hover:from-blue-600 hover:to-blue-800 text-white font-semibold rounded-lg shadow-sm transition disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {tokenLoading ? (
+                    <span className="flex items-center gap-2">
+                      <svg className="animate-spin h-5 w-5" viewBox="0 0 24 24">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z" />
                       </svg>
-                    </button>
-                  </div>
-                ))}
-              </div>
-            )}
-
-            {/* Cüzdan Ekleme Formu */}
-            <div className="space-y-4">
-              <div className="grid grid-cols-3 gap-4">
-                <button
-                  type="button"
-                  onClick={handleAddToken}
-                  className="w-full flex items-center justify-center px-4 py-2.5 bg-gradient-to-tr from-emerald-500 to-emerald-700 hover:from-emerald-600 hover:to-emerald-800 text-white font-medium rounded-lg shadow-md transition-all focus:outline-none focus:ring-2 focus:ring-emerald-500"
-                >
-                  Token Ekle
-                </button>
-
-                <button
-                  type="button"
-                  onClick={handleAddWallet}
-                  className="w-full flex items-center justify-center px-4 py-2.5 bg-gradient-to-tr from-violet-500 to-violet-700 hover:from-violet-600 hover:to-violet-800 text-white font-medium rounded-lg shadow-md transition-all focus:outline-none focus:ring-2 focus:ring-violet-500"
-                >
-                  Cüzdan Ekle
-                </button>
-
-                <button
-                  type="button"
-                  onClick={handleImport}
-                  disabled={importing || wallets.length === 0}
-                  className="w-full flex items-center justify-center px-4 py-2.5 bg-gradient-to-tr from-blue-500 to-blue-700 hover:from-blue-600 hover:to-blue-800 text-white font-medium rounded-lg shadow-md transition-all focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50"
-                >
-                  {importing ? "İçe Aktarılıyor..." : "İçe Aktar"}
+                      Ekleniyor...
+                    </span>
+                  ) : (
+                    'Token Ekle'
+                  )}
                 </button>
               </div>
             </div>
           </div>
-        </form>
-      </div>
+        </div>
+      )}
 
+      {/* İçe Aktar Butonu */}
+      {wallets.length > 0 && (
+        <div className="flex justify-end">
+          <button
+            onClick={handleImport}
+            disabled={importing}
+            className="px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-lg shadow-sm transition disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {importing ? 'Tamamlanıyor...' : 'Listeyi Tamamla'}
+          </button>
+        </div>
+      )}
+
+      {/* Kayıtlı Cüzdan ve Tokenlar + Sorgulama Alanı */}
       <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-lg border border-slate-100 dark:border-slate-800 p-6">
         <div className="flex items-center justify-between mb-4">
           <h3 className="text-xl font-semibold text-slate-900 dark:text-white">
             Kayıtlı Cüzdan ve Tokenlar
           </h3>
-          {isWalletArray && list.wallets.length > 0 && (
+          {Array.isArray(list.wallets) && list.wallets.length > 0 && (
             <div className="flex items-center gap-2">
               <DatePicker
                 selected={selectedDate}
@@ -437,7 +484,7 @@ export default function ListDetailPage() {
             </div>
           )}
         </div>
-        {isWalletArray ? (
+        {Array.isArray(list.wallets) ? (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             {list.wallets.map((wallet: any, idx: number) => (
               <div key={wallet.address + wallet.chain} className="bg-slate-50 dark:bg-slate-800 p-4 rounded-lg shadow-sm">

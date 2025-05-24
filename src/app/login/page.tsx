@@ -21,7 +21,7 @@ export default function LoginPage() {
       const response = await api.post("/login", formData);
       localStorage.setItem("token", response.data.token);
       toast.success("Giriş başarılı!");
-      router.push("/dashboard");
+      router.push("/dashboard/lists");
     } catch (error) {
       toast.error("Giriş başarısız!");
     } finally {

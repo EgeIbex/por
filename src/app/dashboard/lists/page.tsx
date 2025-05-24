@@ -4,6 +4,10 @@ import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import api from "@/utils/api";
 import toast from "react-hot-toast";
+import Image from 'next/image';
+import tutorial1 from '@/assets/1.png';
+import tutorial2 from '@/assets/2.png';
+import tutorial3 from '@/assets/3.png';
 
 interface Exchange {
   id: number;
@@ -27,6 +31,9 @@ export default function ListsPage() {
   const [activeExchangeId, setActiveExchangeId] = useState<number | null>(null);
   const [showExchangeModal, setShowExchangeModal] = useState(false);
   const [newExchangeName, setNewExchangeName] = useState("");
+  const [showTutorial, setShowTutorial] = useState(false);
+  const [tutorialStep, setTutorialStep] = useState(0);
+  const [currentStep, setCurrentStep] = useState(0);
 
   const fetchData = async () => {
     try {
@@ -50,6 +57,34 @@ export default function ListsPage() {
   useEffect(() => {
     fetchData();
   }, []);
+
+  useEffect(() => {
+    if (typeof window !== "undefined" && !localStorage.getItem("por_tutorial_shown")) {
+      setShowTutorial(true);
+    }
+  }, []);
+
+  const tutorialSlides = [
+    {
+      title: "Hoşgeldiniz!",
+      desc: "Bu uygulama ile borsalarınızı, cüzdanlarınızı ve tokenlarınızı kolayca yönetebilirsiniz."
+    },
+    {
+      title: "Borsa ve Liste Yönetimi",
+      desc: "Yeni borsa ekleyebilir, her borsa için farklı listeler oluşturabilirsiniz. Listelere tıklayarak detaylara ulaşabilirsiniz."
+    },
+    {
+      title: "Cüzdan & Token Takibi",
+      desc: "Her listeye cüzdan ve token ekleyebilir, snapshot alabilir ve geçmiş verileri inceleyebilirsiniz. Şimdi başlayabilirsiniz!"
+    }
+  ];
+
+  const handleCloseTutorial = () => {
+    setShowTutorial(false);
+    if (typeof window !== "undefined") {
+      localStorage.setItem("por_tutorial_shown", "1");
+    }
+  };
 
   // Yeni borsa ekleme
   const handleAddExchange = async (e: React.FormEvent) => {
@@ -116,7 +151,8 @@ export default function ListsPage() {
             style={{ minWidth: 40 }}
             tabIndex={-1}
           >
-            <svg className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" /></svg>
+            <svg className="h-5 w-5 mr-2" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" /></svg>
+            Borsa Ekle
           </button>
         </div>
         {/* Scrollable sekmeler */}
@@ -223,6 +259,122 @@ export default function ListsPage() {
           </ul>
         )}
       </div>
+
+      {/* Tutorial Modal */}
+      {showTutorial && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60">
+          <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-xl p-8 w-full max-w-3xl relative animate-fade-in">
+            <button
+              onClick={handleCloseTutorial}
+              className="absolute top-4 right-4 text-slate-400 hover:text-blue-600 dark:hover:text-blue-300 text-xl"
+              aria-label="Kapat"
+            >×</button>
+
+            <div className="space-y-8">
+              <h3 className="text-2xl font-bold text-slate-900 dark:text-white text-center">
+                Hoş Geldiniz! Nasıl Kullanılır?
+              </h3>
+
+              <div className="relative overflow-hidden">
+                <div className="flex transition-transform duration-500 ease-in-out" style={{ transform: `translateX(-${currentStep * 100}%)` }}>
+                  {/* Adım 1 */}
+                  <div className="w-full flex-shrink-0">
+                    <div className="bg-slate-50 dark:bg-slate-800 rounded-xl p-6 space-y-4">
+                      <div className="relative w-[460px] h-[220px] mx-auto bg-white dark:bg-slate-900 rounded-lg overflow-hidden">
+                        <Image
+                          src={tutorial1}
+                          alt="Borsa ve Liste Seçimi"
+                          className="object-contain"
+                          fill
+                          sizes="(max-width: 768px) 100vw, 50vw"
+                        />
+                      </div>
+                      <p className="text-slate-700 dark:text-slate-300 text-center text-lg">
+                        Bir borsa seçin veya yeni bir isimle borsa yaratın. Seçilen borsa sekmesinde iken bir arama listesi seçin veya oluşturun.
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Adım 2 */}
+                  <div className="w-full flex-shrink-0">
+                    <div className="bg-slate-50 dark:bg-slate-800 rounded-xl p-6 space-y-4">
+                      <div className="relative w-[460px] h-[220px] mx-auto bg-white dark:bg-slate-900 rounded-lg overflow-hidden">
+                        <Image
+                          src={tutorial2}
+                          alt="Cüzdan Ekleme"
+                          className="object-contain"
+                          fill
+                          sizes="(max-width: 768px) 100vw, 50vw"
+                        />
+                      </div>
+                      <p className="text-slate-700 dark:text-slate-300 text-center text-lg">
+                        Arama listesi sayfasında ağ ve adres bilgisi vererek cüzdan veya cüzdanlar ekleyin.
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Adım 3 */}
+                  <div className="w-full flex-shrink-0">
+                    <div className="bg-slate-50 dark:bg-slate-800 rounded-xl p-6 space-y-4">
+                      <div className="relative w-[460px] h-[220px] mx-auto bg-white dark:bg-slate-900 rounded-lg overflow-hidden">
+                        <Image
+                          src={tutorial3}
+                          alt="Token Ekleme ve Sorgulama"
+                          className="object-contain"
+                          fill
+                          sizes="(max-width: 768px) 100vw, 50vw"
+                        />
+                      </div>
+                      <p className="text-slate-700 dark:text-slate-300 text-center text-lg">
+                        Eklenen cüzdanların içine token adres bilgisi ile token ekleyin. Listeyi tamamladıktan sonra sorgulamak istediğiniz tarihte sorgu işlemini başlatın.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Navigasyon */}
+              <div className="flex justify-between items-center">
+                <button
+                  onClick={() => setCurrentStep(prev => Math.max(0, prev - 1))}
+                  disabled={currentStep === 0}
+                  className="px-4 py-2 text-slate-700 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white font-medium rounded-lg transition disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  Geri
+                </button>
+
+                <div className="flex gap-2">
+                  {[0, 1, 2].map((step) => (
+                    <button
+                      key={step}
+                      onClick={() => setCurrentStep(step)}
+                      className={`w-2.5 h-2.5 rounded-full transition ${
+                        currentStep === step
+                          ? 'bg-blue-600 dark:bg-blue-400'
+                          : 'bg-slate-300 dark:bg-slate-600'
+                      }`}
+                      aria-label={`Adım ${step + 1}`}
+                    />
+                  ))}
+                </div>
+
+                <button
+                  onClick={() => {
+                    if (currentStep === 2) {
+                      handleCloseTutorial();
+                    } else {
+                      setCurrentStep(prev => Math.min(2, prev + 1));
+                    }
+                  }}
+                  className="px-4 py-2 bg-gradient-to-tr from-blue-500 to-blue-700 hover:from-blue-600 hover:to-blue-800 text-white font-semibold rounded-lg shadow-sm transition"
+                >
+                  {currentStep === 2 ? 'Başla' : 'İleri'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 } 
